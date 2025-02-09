@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Share - P2P File Sharing</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --dark-bg: #0a0a0a;
+            --darker-bg: #151515;
+            --accent: #ff3d00;
+            --accent-glow: #ff3d0033;
+            --text: #ffffff;
+            --secondary: #202020;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+        linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px);
+    background-size: 100px 100px;
+    opacity: 0.3;
+    animation: gridMove 8s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--dark-bg) 0%, var(--darker-bg) 100%);
+            animation: gradientMove 15s ease infinite;
+            background-size: 400% 400%;
+            position: relative;
+            overflow: hidden;
+        }
+
+
+@keyframes gridMove {
+    0% { transform: translate(0, 0); }
+    100% { transform: translate(100px, 100px); }
+}
+
+        @keyframes gradientMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 0;
+        }
+
+        .header h1 {
+            color: var(--accent);
+            font-size: 3.5rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 30px var(--accent-glow);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 20px var(--accent-glow); }
+            to { text-shadow: 0 0 30px var(--accent-glow), 0 0 40px var(--accent-glow); }
+        }
+
+        .connection-box, .file-area {
+            background: var(--darker-bg);
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            transform: translateY(0);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .connection-box:hover, .file-area:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .peer-id {
+            background: var(--secondary);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1.5rem 0;
+            font-family: monospace;
+            font-size: 2rem;
+            text-align: center;
+            letter-spacing: 4px;
+            border: 1px solid var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 1rem;
+            background: var(--secondary);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            box-shadow: 0 0 20px var(--accent-glow);
+            transform: scale(1.02);
+        }
+
+        button {
+            background: var(--accent);
+            color: var(--text);
+            border: none;
+            padding: 1.2rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px var(--accent-glow);
+            width: 100%;
+            margin: 0.5rem 0;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        button::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+
+        button:hover::after {
+            left: 100%;
+        }
+
+        button:hover:not(:disabled) {
+            background: #ff5500;
+            box-shadow: 0 0 30px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background: var(--secondary);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        #status {
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            text-align: center;
+            font-weight: 500;
+            animation: fadeIn 0.3s ease;
+        }
+
+        #progressBar {
+            width: 100%;
+            height: 12px;
+            background: var(--secondary);
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 1.5rem 0;
+            display: none;
+        }
+
+        #progressBar div {
+            height: 100%;
+            background: var(--accent);
+            width: 0;
+            transition: width 0.3s ease-in-out;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .connected-status {
+            background: #00c853;
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            display: none;
+            animation: slideDown 0.5s ease;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .file-area {
+            display: none;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--accent);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(255, 61, 0, 0.2);
+            transform: translateX(200%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+          @media (max-width: 768px) {
+              .container {
+                  padding: 1rem;
+              }
+
+              .header h1 {
+                  font-size: 2.5rem;
+              }
+
+              .header p {
+                  font-size: 0.9rem;
+              }
+
+              .peer-id {
+                  font-size: 1.2rem;
+                  padding: 1rem;
+                  letter-spacing: 2px;
+              }
+
+              .connection-box, .file-area {
+                  padding: 1.2rem;
+              }
+
+              button {
+                  padding: 0.8rem 1.5rem;
+                  font-size: 0.9rem;
+              }
+
+              input[type="text"] {
+                  padding: 0.8rem;
+                  font-size: 0.9rem;
+              }
+
+              #status {
+                  font-size: 0.9rem;
+                  padding: 0.8rem;
+              }
+
+              .connected-status {
+                  font-size: 1rem;
+                  padding: 1rem;
+              }
+
+              .notification {
+                  font-size: 0.9rem;
+                  padding: 12px 20px;
+                  bottom: 15px;
+                  right: 15px;
+              }
+
+              .developer-credit {
+                  font-size: 0.8rem;
+                  margin-top: 1.5rem;
+              }
+          }
+
+          @media (max-width: 480px) {
+              .header h1 {
+                  font-size: 2rem;
+              }
+          }
+          /* Add this CSS in the style section */
+.file-info {
+    background: var(--secondary);
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin-top: 1.5rem;
+}
+
+.file-details {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.progress-container {
+    position: relative;
+}
+
+.progress {
+    width: 100%;
+    height: 12px;
+    background: var(--darker-bg);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+
+#progressPercentage {
+    position: absolute;
+    right: 0;
+    top: -25px;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+        
+    </style>
+
+    </head>
+<body>
+    <div class="notification" id="notification"></div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Home Share</h1>
+            <p>Secure P2P File Sharing</p>
+        </div>
+
+        <!-- Update the connected-status div -->
+<div class="connected-status" id="connectedStatus">
+    Connected to <span id="connectedPeerId"></span>
+</div>
+
+
+        <div class="connection-box">
+            <h2>Your ID</h2>
+            <div class="peer-id" id="peerId"></div>
+
+            <div class="input-group">
+                <input type="text" id="remotePeerId" placeholder="Enter recipient's ID">
+                <button id="connectBtn">Connect</button>
+            </div>
+
+            <div id="status"></div>
+        </div>
+          <div class="file-area">
+              <h2>Share Files</h2>
+              <input type="file" id="fileInput" style="display: none;">
+              <button id="selectFileBtn">Select File</button>
+              <button id="sendBtn" disabled>Send File</button>
+              <div id="progressBar"><div></div></div>
+              <div class="file-info" style="display: none;">
+                  <div class="file-details">
+                      <span id="fileName"></span>
+                      <span id="fileSize"></span>
+                  </div>
+                  <div class="progress-container">
+                      <div id="progressBar" class="progress">
+                          <div class="progress-fill"></div>
+                      </div>
+                      <span id="progressPercentage">0%</span>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+    <script>
+        const peer = new Peer(Math.floor(1000 + Math.random() * 9000).toString());
+        let conn = null;
+        let currentFile = null;
+
+        const peerId = document.getElementById('peerId');
+        const remotePeerId = document.getElementById('remotePeerId');
+        const connectBtn = document.getElementById('connectBtn');
+        const fileInput = document.getElementById('fileInput');
+        const selectFileBtn = document.getElementById('selectFileBtn');
+        const sendBtn = document.getElementById('sendBtn');
+        const status = document.getElementById('status');
+        const progressBar = document.getElementById('progressBar');
+        const progressBarFill = progressBar.querySelector('div');
+
+        peer.on('open', id => {
+    peerId.textContent = id;
+    updateStatus('Ready to connect');
+});
+
+        peer.on('connection', connection => {
+            conn = connection;
+            setupConnection();
+            updateStatus('Peer connected!');
+        });
+
+        connectBtn.addEventListener('click', () => {
+            const remotePeer = remotePeerId.value.trim();
+
+            // Check if trying to connect to self
+            if (remotePeer === peer.id) {
+                updateStatus('Cannot connect to yourself', true);
+                return;
+            }
+
+            // Check for valid ID format (4 digits)
+            if (!/^\d{4}$/.test(remotePeer)) {
+                updateStatus('Invalid ID format. Please enter a 4-digit ID', true);
+                return;
+            }
+
+            conn = peer.connect(remotePeer);
+
+            // Add error handler for invalid peer ID
+            conn.on('error', (err) => {
+                updateStatus('Invalid User ID. User not found', true);
+            });
+
+            setupConnection();
+        });
+
+        // Enhance the updateStatus function to handle errors
+        function updateStatus(message, isError = false) {
+            status.textContent = message;
+            status.style.color = isError ? '#ff3d00' : '#fff';
+            status.style.background = isError ? 'rgba(255, 61, 0, 0.1)' : 'transparent';
+            status.style.padding = '10px';
+            status.style.borderRadius = '8px';
+        }
+
+        selectFileBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+            currentFile = fileInput.files[0];
+            if (currentFile) {
+                sendBtn.disabled = false;
+                updateStatus(`File selected: ${currentFile.name}`);
+            }
+        });
+
+
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function showNotification(message) {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.classList.add('show');
+
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, 3000);
+}
+
+
+
+
+sendBtn.addEventListener('click', () => {
+    if (!conn || !currentFile) return;
+
+    const fileInfo = document.querySelector('.file-info');
+    const progressFill = document.querySelector('.progress-fill');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+
+    fileInfo.style.display = 'block';
+    fileName.textContent = currentFile.name;
+    fileSize.textContent = formatFileSize(currentFile.size);
+
+    const reader = new FileReader();
+
+    reader.onloadstart = () => {
+        progressFill.style.width = '0%';
+        progressPercentage.textContent = 'Loading: 0%';
+    };
+
+    reader.onprogress = (event) => {
+        if (event.lengthComputable) {
+            const progress = (event.loaded / event.total) * 100;
+            progressFill.style.width = `${progress}%`;
+            progressPercentage.textContent = `Loading: ${Math.round(progress)}%`;
+        }
+    };
+
+    reader.onload = () => {
+        progressPercentage.textContent = 'Sending file...';
+        progressFill.style.width = '100%';
+
+        conn.send({
+            type: 'file',
+            filename: currentFile.name,
+            fileSize: currentFile.size,
+            data: reader.result
+        });
+
+        progressPercentage.textContent = 'Receiver is downloading...';
+        
+        conn.send({
+            type: 'incoming',
+            filename: currentFile.name
+        });
+    };
+
+    reader.readAsArrayBuffer(currentFile);
+});
+
+
+function setupConnection() {
+    let receivedChunks = [];
+    let totalChunks = 0;
+
+    conn.on('data', data => {
+        if (data.type === 'incoming') {
+            const fileInfo = document.querySelector('.file-info');
+            const fileName = document.getElementById('fileName');
+            const fileSize = document.getElementById('fileSize');
+            const progressPercentage = document.getElementById('progressPercentage');
+            const progressFill = document.querySelector('.progress-fill');
+
+            fileInfo.style.display = 'block';
+            fileName.textContent = data.filename;
+            fileSize.textContent = formatFileSize(data.fileSize);
+            progressFill.style.width = '0%';
+            progressPercentage.textContent = 'Preparing to receive...';
+            
+            receivedChunks = [];
+            showNotification(`Incoming file: ${data.filename}`);
+        }
+        else if (data.type === 'chunk') {
+            const progressFill = document.querySelector('.progress-fill');
+            const progressPercentage = document.getElementById('progressPercentage');
+            
+            totalChunks = data.totalChunks;
+            receivedChunks[data.currentChunk] = data.data;
+
+            const progress = ((data.currentChunk + 1) / data.totalChunks) * 100;
+            progressFill.style.width = `${progress}%`;
+            progressPercentage.textContent = `Downloading: ${Math.round(progress)}%`;
+
+            if (data.currentChunk + 1 < data.totalChunks) {
+                conn.send({ type: 'next-chunk' });
+            } else {
+                const blob = new Blob(receivedChunks);
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = data.filename;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                conn.send({
+                    type: 'downloaded',
+                    filename: data.filename
+                });
+
+                setTimeout(() => {
+                    const fileInfo = document.querySelector('.file-info');
+                    fileInfo.style.display = 'none';
+                    showNotification(`Received: ${data.filename}`);
+                }, 1000);
+            }
+        }
+        else if (data.type === 'next-chunk') {
+            const currentChunk = receivedChunks.length;
+            if (currentChunk < totalChunks) {
+                sendChunk();
+            }
+        }
+        else if (data.type === 'downloaded') {
+            const progressPercentage = document.getElementById('progressPercentage');
+            progressPercentage.textContent = 'Transfer complete';
+            
+            setTimeout(() => {
+                const fileInfo = document.querySelector('.file-info');
+                fileInfo.style.display = 'none';
+                currentFile = null;
+                sendBtn.disabled = true;
+                fileInput.value = '';
+            }, 1000);
+        }
+    });
+
+    conn.on('open', () => {
+        document.querySelector('.connection-box').style.display = 'none';
+        document.querySelector('.file-area').style.display = 'block';
+        document.getElementById('connectedStatus').style.display = 'block';
+        document.getElementById('connectedPeerId').textContent = conn.peer;
+        sendBtn.disabled = !currentFile;
+    });
+}
+
+
+
+
+
+        function updateStatus(message, isError = false) {
+            status.textContent = message;
+            status.className = isError ? 'error' : 'success';
+        }
+        function setupConnection() {
+    conn.on('data', data => {
+        if (data.filename) {
+            // Show progress UI for receiver
+            const fileInfo = document.querySelector('.file-info');
+            const progressFill = document.querySelector('.progress-fill');
+            const progressPercentage = document.getElementById('progressPercentage');
+            const fileName = document.getElementById('fileName');
+            const fileSize = document.getElementById('fileSize');
+
+            fileInfo.style.display = 'block';
+            fileName.textContent = data.filename;
+            fileSize.textContent = formatFileSize(data.data.byteLength);
+            
+            // Simulate download progress
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 2;
+                if (progress <= 100) {
+                    progressFill.style.width = `${progress}%`;
+                    progressPercentage.textContent = `${progress}%`;
+                } else {
+                    clearInterval(interval);
+                    
+                    // Create and trigger download
+                    const blob = new Blob([data.data]);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = data.filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+
+                    setTimeout(() => {
+                        fileInfo.style.display = 'none';
+                        showNotification(`Received file: ${data.filename}`);
+                    }, 1000);
+                }
+            }, 50);
+        }
+    });
+
+    conn.on('open', () => {
+        document.querySelector('.connection-box').style.display = 'none';
+        document.querySelector('.file-area').style.display = 'block';
+        document.getElementById('connectedStatus').style.display = 'block';
+        document.getElementById('connectedPeerId').textContent = conn.peer;
+        sendBtn.disabled = !currentFile;
+    });
+}
+
+
+
+    </script>
+
+<style>
+    /* Add this CSS to your existing styles */
+.developer-credit {
+    text-align: center;
+    padding: 1.5rem 0;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 10;
+}
+
+.developer-credit a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.developer-credit a:hover {
+    border-bottom: 1px solid var(--accent);
+    text-shadow: 0 0 10px var(--accent-glow);
+}
+
+@media (max-width: 768px) {
+    .container {
+        margin-bottom: 60px; /* Add space for fixed developer credit */
+    }
+    
+    .developer-credit {
+        padding: 1rem 0;
+        font-size: 0.8rem;
+    }
+}
+
+</style>
+<div class="developer-credit">
+    Developed by <a href="https://instagram.com/_an_arif_" target="_blank">Arif</a>
+</div>
+
+
+
+</body>
+</html>
+
